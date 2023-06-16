@@ -61,5 +61,5 @@ INSERT INTO usuarios (usuario, password, validado)
            ('pepe', crypt('pepe', gen_salt('bf', 10)), false);
 
 INSERT INTO cupones (cupon, descuento, fecha_caducidad)
-    VALUES ('DESCUENTO10', 10.00,  '2023-07-01'),
-            ('DESCUENTO20', 20.00,  '2022-07-01');
+    VALUES ('DESCUENTO10', 10,  '2023-07-01'),
+            ('DESCUENTO20', 20,  '2022-07-01');

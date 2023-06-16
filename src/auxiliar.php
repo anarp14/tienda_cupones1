@@ -60,3 +60,8 @@ function redirigir_login()
 {
     header('Location: /login.php');
 }
+
+function volver_a($location)
+{
+    header($location);
+}
