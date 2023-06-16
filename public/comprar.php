@@ -19,15 +19,14 @@
 
     $carrito = unserialize(carrito());
 
-    $cupon_id = null;
     $cupon = obtener_get('cupon');
 
     if (isset($cupon)) {
         $pdo = conectar();
-        $sent = $pdo->prepare('SELECT id FROM cupones WHERE lower(unaccent(cupon)) = lower(unaccent(:cupon))');
+        $sent = $pdo->prepare('SELECT * FROM cupones WHERE (unaccent(cupon)) = upper(unaccent(:cupon))');
         $sent->execute([':cupon' => $cupon]);
         $cupon_encontrado = $sent->fetch();
-        if ($cupon_encontrado) {
+        if ($cupon_encontrado) {   //Si el cupon se encuentra en la bd, la variable devuelve un array asociativo, en caso contrario, devuelve false.
             $cupon_id = $cupon_encontrado['id'];
         }
     }
@@ -39,8 +38,8 @@
         $sent = $pdo->query("SELECT *
                                  FROM articulos
                                 $where");
-        foreach ($sent->fetchAll(PDO::FETCH_ASSOC) as $fila) {
-            if ($fila['stock'] < $carrito->getLinea($fila['id'])->getCantidad()) {
+        foreach ($sent->fetchAll(PDO::FETCH_ASSOC) as $cupon_encontrado) {
+            if ($cupon_encontrado['stock'] < $carrito->getLinea($cupon_encontrado['id'])->getCantidad()) {
                 $_SESSION['error'] = 'No hay existencias suficientes para crear la factura.';
                 return volver();
             }
@@ -87,34 +86,21 @@
     }
 
 
-
-
     $errores = ['cupon' => []];
 
-    $cupon = obtener_get('cupon');
-
-
     if (isset($cupon)) {
-        $pdo = conectar();
-        $sent = $pdo->prepare("SELECT * FROM cupones WHERE lower(unaccent(cupon)) = lower(unaccent(:cupon))");
-        $sent->execute([':cupon' => $cupon]);
 
-        $cupon_encontrado = false;
+        $encontrado = false;
 
-        $date = date('Y-m-d');
+        $hoy = date('Y-m-d');
 
-        foreach ($sent as $fila) {
-            if (strtoupper($fila['cupon']) === strtoupper($cupon)) {
-                $cupon_encontrado = true;
-                $_SESSION['exito'] = 'El cupón es válido.';
-                if ($fila['fecha_caducidad'] <= $date) {
-                    $errores['cupon'][] = 'El cupón ha caducado.';
-                }
-                break;
+        if ($cupon_encontrado['cupon'] === strtoupper($cupon)) {
+            $encontrado = true;
+            if ($cupon_encontrado['fecha_caducidad'] < $hoy) {
+                $errores['cupon'][] = 'El cupón ha caducado.';
             }
         }
-
-        if (!$cupon_encontrado) {
+        if (!$encontrado) {
             $errores['cupon'][] = 'No existe ese cupón.';
         }
     }
@@ -124,10 +110,10 @@
     ?>
 
     <div class="container mx-auto">
-        <?php require '../src/_menu.php' ?>
+        <?php require '../src/_menu.php';
+        require '../src/_alerts.php'; ?>
+
         <div class="overflow-y-auto py-4 px-3 bg-gray-50 rounded dark:bg-gray-800">
-
-
             <table class="mx-auto text-sm text-left text-gray-500 dark:text-gray-400">
                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                     <th scope="col" class="py-3 px-6">Código</th>
@@ -146,17 +132,11 @@
                         $precio = $articulo->getPrecio();
                         $importe = $cantidad * $precio;
                         $total += $importe;
-                        $cupon = obtener_get('cupon');
-                        if ($vacio && isset($cupon)) {
-                            $pdo = conectar();
-                            $cupones_ = $pdo->prepare("SELECT * FROM cupones WHERE lower(unaccent(cupon)) = lower(unaccent(:cupon))");
-                            $cupones_->execute([':cupon' => $cupon]);
-                            foreach ($cupones_ as $cupon) {
-                                $descuento = hh($cupon['descuento']);
-                                $total_con_descuento = $total - ($total * ($descuento / 100));
-                            }
-                        }
 
+                        if ($vacio && isset($cupon)) {
+                            $descuento = hh($cupon_encontrado['descuento']);
+                            $total_con_descuento = $total - ($total * ($descuento / 100));
+                        }
                         ?>
 
                         <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
@@ -173,27 +153,27 @@
                     <?php endforeach ?>
                 </tbody>
                 <tfoot>
-                <tr>
-                    <td colspan="3"></td>
-                    <td class="text-center font-semibold">TOTAL:</td>
-                    <td class="text-center font-semibold"><?= dinero($total) ?></td>
                     <tr>
-                    <?php if ($vacio && isset($cupon)) : ?>
-                        <tr>
+                        <td colspan="3"></td>
+                        <td class="text-center font-semibold">TOTAL:</td>
+                        <td class="text-center font-semibold"><?= dinero($total) ?></td>
+                    <tr>
+                        <?php if ($vacio && isset($cupon)) : ?>
+                    <tr>
                         <td colspan="3"></td>
                         <td class="text-center font-semibold">TOTAL con descuento:</td>
                         <td class="text-center font-semibold"><?= dinero($total_con_descuento) ?></td>
-                        <td class="text-center font-semibold"><?= $cupon['cupon'] ?></td>
+                        <td class="text-center font-semibold"><?= $cupon_encontrado['cupon'] ?></td>
                     </tr>
 
-                    <?php endif ?>
-                    
+                <?php endif ?>
+
                 </tfoot>
                 <!-- Cuestionario cupones -->
                 <div>
                     <p>¿Tienes un cupón de descuento?</p>
                     <form action="" method="GET" class="mx-auto flex mt-4">
-                        <input type="text" name="cupon" value="<?= isset($cupon['cupon']) ? $cupon['cupon'] : '' ?>" class="border text-sm rounded-lg p-2.5">
+                        <input type="text" name="cupon" value="<?= isset($cupon_encontrado['cupon']) ? $cupon_encontrado['cupon'] : '' ?>" class="border text-sm rounded-lg p-2.5">
                         <?php foreach ($errores['cupon'] as $err) : ?>
                             <p class="mt-2 text-sm text-red-600 dark:text-red-500"><span class="font-bold">¡Error!</span> <?= $err ?></p>
                         <?php endforeach ?>
